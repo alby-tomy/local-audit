@@ -35,7 +35,14 @@ async def init_db() -> None:
     if _pool is not None:
         return
     settings = get_settings()
-    _pool = await asyncpg.create_pool(settings.DATABASE_URL, min_size=1, max_size=10)
+    # Supabase pooler/PgBouncer compatibility:
+    # disable asyncpg statement cache to avoid prepared statement errors.
+    _pool = await asyncpg.create_pool(
+        settings.DATABASE_URL,
+        min_size=1,
+        max_size=10,
+        statement_cache_size=0,
+    )
     _db = DatabaseClient(_pool)
 
 
