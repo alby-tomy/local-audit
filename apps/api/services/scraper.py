@@ -85,7 +85,18 @@ _OSM_HEADERS = {
     "User-Agent": "LocalAuditAI/1.0 (local business discovery; +https://localaudit.ai)",
 }
 _NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
-_OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+# The Overpass cluster exposes several load-balanced front-ends that hit
+# different backend nodes — overpass-api.de intermittently returns 429/504
+# under load, but lz4./z. subdomains often aren't affected at the same
+# moment. Trying them in sequence avoids surfacing a transient single-node
+# outage as "0 results". (Verified reachable via a live probe — third-party
+# mirrors like kumi.systems and openstreetmap.ru were tried but proved
+# unreachable/timed out from this environment.)
+_OVERPASS_URLS = [
+    "https://overpass-api.de/api/interpreter",
+    "https://lz4.overpass-api.de/api/interpreter",
+    "https://z.overpass-api.de/api/interpreter",
+]
 _OSM_SEARCH_RADIUS_M = 30000
 
 # Maps a lower-cased niche term to an OSM tag/value pair used to filter the
@@ -435,40 +446,35 @@ def _discover_via_openstreetmap(
     return businesses[:num_results]
 
 
-def _query_overpass(query: str, max_attempts: int = 3) -> list[dict[str, Any]] | None:
-    """POST a query to the Overpass API, retrying on transient rate limits.
+def _query_overpass(query: str) -> list[dict[str, Any]] | None:
+    """POST a query to Overpass, trying multiple public mirrors in sequence.
 
-    The free overpass-api.de instance returns 429/504 under load — these are
-    transient, so a short backoff-and-retry resolves them without surfacing
-    a failure to the user. Returns None (not []) on a hard failure so the
-    caller can distinguish "no results" from "couldn't even ask".
+    The free Overpass instances are volunteer-run and intermittently return
+    429 (rate limited) or 504 (overloaded) — these are transient per-instance
+    issues, so rather than retrying the same overloaded instance, we move on
+    to the next mirror in _OVERPASS_URLS immediately. This resolves transient
+    outages without surfacing them to the user as "0 results".
+
+    Returns None (not []) on a hard failure so the caller can distinguish
+    "no results" from "couldn't even ask".
     """
-    for attempt in range(max_attempts):
+    for i, url in enumerate(_OVERPASS_URLS):
         try:
-            resp = requests.post(
-                _OVERPASS_URL,
-                data={"data": query},
-                headers=_OSM_HEADERS,
-                timeout=45,
-            )
-            if resp.status_code in (429, 504) and attempt < max_attempts - 1:
-                wait = 5 * (attempt + 1)
+            resp = requests.post(url, data={"data": query}, headers=_OSM_HEADERS, timeout=40)
+            if resp.status_code in (429, 504):
                 logger.warning(
-                    "Overpass returned %d — retrying in %ds (attempt %d/%d)",
-                    resp.status_code, wait, attempt + 1, max_attempts,
+                    "Overpass mirror %s returned %d — trying next mirror", url, resp.status_code,
                 )
-                time.sleep(wait)
                 continue
             resp.raise_for_status()
             return resp.json().get("elements", [])
         except Exception as exc:
-            if attempt < max_attempts - 1:
-                wait = 5 * (attempt + 1)
-                logger.warning("Overpass query failed (%s) — retrying in %ds", exc, wait)
-                time.sleep(wait)
-                continue
-            logger.error("Overpass query failed after %d attempts: %s", max_attempts, exc)
-            return None
+            logger.warning("Overpass mirror %s failed (%s) — trying next mirror", url, exc)
+            if i < len(_OVERPASS_URLS) - 1:
+                time.sleep(2)
+            continue
+
+    logger.error("All Overpass mirrors failed for query")
     return None
 
 

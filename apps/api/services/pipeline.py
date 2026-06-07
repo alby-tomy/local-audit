@@ -159,8 +159,17 @@ async def run_pipeline(
                 continue
 
             score = lead_data.get("score", 100)
-            issue_count = len(lead_data.get("issues", []))
+            issues = lead_data.get("issues", [])
+            issue_count = len(issues)
             run.log(f"  Score: {score}/100, Issues: {issue_count}")
+
+            # A site that's down entirely is the single strongest pitch a
+            # local-audit outreach can make ("your website isn't loading —
+            # you're losing 100% of your traffic"), even though the analyzer
+            # only logs one "broken_page" issue (the other checks can't run
+            # on a page that never loaded). Treat it as an automatic qualifier
+            # so the issue-count filter below doesn't discard these top leads.
+            is_broken_page = any(issue.get("code") == "broken_page" for issue in issues)
 
             # ── Phase 3: Filter — skip healthy sites ─────────────────────
             if score > settings.MAX_LEAD_SCORE:
@@ -171,7 +180,7 @@ async def run_pipeline(
                 await _save_lead(db, user_id, lead_data)
                 continue
 
-            if issue_count < settings.MIN_ISSUES_TO_CONTACT:
+            if issue_count < settings.MIN_ISSUES_TO_CONTACT and not is_broken_page:
                 run.log(f"  Skipping {name} — only {issue_count} issues (minimum: {settings.MIN_ISSUES_TO_CONTACT}).")
                 run.total_skipped += 1
                 lead_data["status"] = LeadStatus.IGNORED

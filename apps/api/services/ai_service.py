@@ -174,10 +174,11 @@ Top issue: {top_issue_text}
 {instructions}
 
 IMPORTANT RULES:
-- Address the owner as "Hi [Business Name] Team," or just the business name
+- Open with "Hey {business_name}," (use the business name directly, not "Team")
+- In the first 1-2 lines, introduce the sender: "I'm Alby Tomy, a freelancer — I went through an audit and found your website has {top_issue_text}." (rephrase naturally in your own words, don't quote this verbatim)
 - Do NOT use fake names or "Dear Sir/Madam"
 - Do NOT claim to be their customer or existing relationship
-- Sign off as: "Best,\nThe LocalAudit AI Team"
+- Sign off as: "Best,\nAlby Tomy"
 - Return ONLY valid JSON: {{"subject": "...", "body": "..."}}
 - Body should use line breaks (\\n) not HTML tags"""
 
@@ -209,11 +210,12 @@ def _fallback_report(
 ) -> str:
     issue_lines = "\n".join(f"• {i['title']}: {i['impact']}" for i in issues[:5])
     return (
-        f"Hi {business_name} team,\n\n"
-        f"We recently reviewed your website and gave it a health score of {score}/100. "
-        f"Here are the top issues we found:\n\n{issue_lines}\n\n"
+        f"Hey {business_name},\n\n"
+        f"I'm Alby Tomy, a freelancer — I went through an audit on your website and gave it "
+        f"a health score of {score}/100. Here's what I found:\n\n{issue_lines}\n\n"
         f"These issues are likely costing you customers in {city} every day. "
-        f"We'd love to help you fix them — reply to this email to get started."
+        f"Happy to help you fix them — just reply to this email to get started.\n\n"
+        f"Best,\nAlby Tomy"
     )
 
 
@@ -223,11 +225,11 @@ def _fallback_email(
     return {
         "subject": f"Your {business_name} website is losing customers",
         "body": (
-            f"Hi {business_name} team,\n\n"
-            f"We analysed your website and found it scores {score}/100 for customer conversion. "
-            f"The biggest issue: {top_issue}.\n\n"
+            f"Hey {business_name},\n\n"
+            f"I'm Alby Tomy, a freelancer — I went through an audit on your website and found it "
+            f"scores {score}/100 for customer conversion. The biggest issue: {top_issue}.\n\n"
             f"This is silently costing you leads every week in {city}.\n\n"
-            f"Reply to this email and we'll show you exactly what to fix — for free.\n\n"
-            f"Best,\nThe LocalAudit AI Team"
+            f"Reply to this email and I'll show you exactly what to fix — for free.\n\n"
+            f"Best,\nAlby Tomy"
         ),
     }
