@@ -140,6 +140,7 @@ def generate_outreach_email(
 
     top_issues = issues[:2]
     top_issue_text = top_issues[0]["title"] if top_issues else "website performance issues"
+    issue_count = len(issues)
     load_note = f"It currently loads in {load_time} seconds (industry average: under 3s)." if load_time and load_time > 3 else ""
 
     type_instructions = {
@@ -169,16 +170,24 @@ def generate_outreach_email(
 
 Target business: {business_name}, {city}
 Their website: analyzed and scored {score}/100
+Page load time: {load_time if load_time else 'not measured'}s
+Number of issues found in the audit: {issue_count}
 Top issue: {top_issue_text}
 
 {instructions}
 
-IMPORTANT RULES:
-- Open with "Hey {business_name}," (use the business name directly, not "Team")
-- In the first 1-2 lines, introduce the sender: "I'm Alby Tomy, a freelancer — I went through an audit and found your website has {top_issue_text}." (rephrase naturally in your own words, don't quote this verbatim)
+IMPORTANT RULES — follow this narrative structure:
+- Open with "Hi {business_name} team,"
+- Mention that you were looking at a few businesses in {city} and came across their website
+- Point out ONE concrete problem that could be costing them customers — e.g. their load time ({load_time if load_time else 'slow'} seconds) and/or missing a quick-contact option like WhatsApp (rephrase naturally, don't quote verbatim)
+- Briefly explain why it matters: most visitors leave if a site takes more than 3 seconds to load, especially on mobile, so potential customers may never reach out
+- Mention that a quick audit found {issue_count} small things like this that could improve conversions
+- Add a short 1-2 line summary of what the audit found
+- Offer — low pressure — to fix these or show exactly what to change ("no pressure")
+- Close by asking: "Would you be open to a quick 10-minute chat this week?"
 - Do NOT use fake names or "Dear Sir/Madam"
 - Do NOT claim to be their customer or existing relationship
-- Sign off as: "Best,\nAlby Tomy"
+- Sign off EXACTLY as: "Best,\nAlby Tomy,\nFreelancer Software Engineer,\nalby.u.tomy@gmail.com\nalby-tomy.online"
 - Return ONLY valid JSON: {{"subject": "...", "body": "..."}}
 - Body should use line breaks (\\n) not HTML tags"""
 
@@ -200,10 +209,13 @@ IMPORTANT RULES:
         return result
     except Exception as exc:
         logger.error("Failed to generate email for %s: %s", business_name, exc)
-        return _fallback_email(email_type, business_name, city, top_issue_text, score)
+        return _fallback_email(email_type, business_name, city, top_issue_text, score, issues, load_time)
 
 
 # ── Fallback templates (used when Claude is unavailable) ─────────────────────
+
+_SIGNATURE = "Best,\nAlby Tomy,\nFreelancer Software Engineer,\nalby.u.tomy@gmail.com\nalby-tomy.online"
+
 
 def _fallback_report(
     business_name: str, city: str, issues: list[dict], score: int
@@ -215,21 +227,42 @@ def _fallback_report(
         f"a health score of {score}/100. Here's what I found:\n\n{issue_lines}\n\n"
         f"These issues are likely costing you customers in {city} every day. "
         f"Happy to help you fix them — just reply to this email to get started.\n\n"
-        f"Best,\nAlby Tomy"
+        f"{_SIGNATURE}"
     )
 
 
 def _fallback_email(
-    email_type: str, business_name: str, city: str, top_issue: str, score: int
+    email_type: str,
+    business_name: str,
+    city: str,
+    top_issue: str,
+    score: int,
+    issues: list[dict] | None = None,
+    load_time: float | None = None,
 ) -> dict[str, str]:
+    issues = issues or []
+    issue_count = len(issues)
+    load_time_text = f"{load_time:.1f}" if load_time else "a few"
+    summary_lines = "\n".join(f"• {i['title']}: {i['impact']}" for i in issues[:3])
+    short_summary = (
+        f"Here's a quick summary from the audit (health score: {score}/100):\n{summary_lines}"
+        if summary_lines
+        else f"The audit gave your site a health score of {score}/100 — there's room to convert more visitors into customers."
+    )
+
     return {
-        "subject": f"Your {business_name} website is losing customers",
+        "subject": f"Quick note about {business_name}'s website",
         "body": (
-            f"Hey {business_name},\n\n"
-            f"I'm Alby Tomy, a freelancer — I went through an audit on your website and found it "
-            f"scores {score}/100 for customer conversion. The biggest issue: {top_issue}.\n\n"
-            f"This is silently costing you leads every week in {city}.\n\n"
-            f"Reply to this email and I'll show you exactly what to fix — for free.\n\n"
-            f"Best,\nAlby Tomy"
+            f"Hi {business_name} team,\n\n"
+            f"I was looking at a few businesses in {city} and came across your website.\n\n"
+            f"I noticed something that might be costing you customers — your site takes around "
+            f"{load_time_text} seconds to load and doesn't have a quick contact option like WhatsApp.\n\n"
+            f"Most people leave if a site takes more than 3 seconds, especially on mobile, "
+            f"which means potential customers may not even reach out.\n\n"
+            f"I ran a quick audit and found {issue_count} small things like this that could improve conversions.\n\n"
+            f"{short_summary}\n\n"
+            f"If you'd like, I can fix these quickly or show you exactly what to change — no pressure.\n\n"
+            f"Would you be open to a quick 10-minute chat this week?\n\n"
+            f"{_SIGNATURE}"
         ),
     }

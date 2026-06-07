@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
+import { AmbientBackground } from "@/components/ambient-background";
+import { ThemeSwitcher } from "@/components/theme-switcher";
+import { Sparkles, ArrowRight, Loader2 } from "lucide-react";
 
 export default function LoginPage() {
   const [isRegister, setIsRegister] = useState(false);
@@ -34,20 +37,35 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-900 to-brand-700 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
+    <div className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden">
+      <AmbientBackground />
+
+      <div className="absolute top-6 right-6 z-10">
+        <ThemeSwitcher />
+      </div>
+
+      <div className="w-full max-w-md animate-fade-up">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-white">LocalAudit AI</h1>
-          <p className="text-brand-100 mt-2">Turn local businesses into clients</p>
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-edge bg-surface/60 backdrop-blur-xl text-xs font-medium text-muted mb-5">
+            <Sparkles className="h-3.5 w-3.5 text-accent" />
+            AI-powered local lead generation
+          </div>
+          <h1 className="font-display text-4xl font-bold tracking-tight">
+            <span className="gradient-text">LocalAudit</span>{" "}
+            <span className="text-fg">AI</span>
+          </h1>
+          <p className="text-muted mt-2.5">Turn local businesses into clients — automatically.</p>
         </div>
 
-        <div className="card p-8">
-          <h2 className="text-xl font-semibold text-slate-900 mb-6">
-            {isRegister ? "Create your account" : "Sign in to your account"}
+        <div className="card p-8 relative">
+          <div className="absolute inset-x-8 -top-px h-px bg-gradient-to-r from-transparent via-accent/60 to-transparent" />
+
+          <h2 className="font-display text-xl font-semibold text-fg mb-6">
+            {isRegister ? "Create your account" : "Welcome back"}
           </h2>
 
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+            <div className="mb-4 p-3 rounded-xl border border-rose-500/30 bg-rose-500/10 text-sm text-rose-400">
               {error}
             </div>
           )}
@@ -55,7 +73,7 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             {isRegister && (
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
+                <label className="label">Full Name</label>
                 <input
                   className="input"
                   type="text"
@@ -66,7 +84,7 @@ export default function LoginPage() {
               </div>
             )}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+              <label className="label">Email</label>
               <input
                 className="input"
                 type="email"
@@ -77,7 +95,7 @@ export default function LoginPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
+              <label className="label">Password</label>
               <input
                 className="input"
                 type="password"
@@ -90,20 +108,32 @@ export default function LoginPage() {
             </div>
 
             <button type="submit" className="btn-primary w-full mt-2" disabled={loading}>
-              {loading ? "Please wait..." : isRegister ? "Create Account" : "Sign In"}
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  {isRegister ? "Create Account" : "Sign In"}
+                  <ArrowRight className="h-4 w-4" />
+                </>
+              )}
             </button>
           </form>
 
-          <p className="mt-4 text-center text-sm text-slate-600">
+          <p className="mt-5 text-center text-sm text-muted">
             {isRegister ? "Already have an account?" : "Don't have an account?"}{" "}
             <button
-              className="text-brand-600 font-medium hover:underline"
+              type="button"
+              className="text-accent font-medium hover:underline underline-offset-4"
               onClick={() => { setIsRegister(!isRegister); setError(""); }}
             >
               {isRegister ? "Sign in" : "Create one"}
             </button>
           </p>
         </div>
+
+        <p className="text-center text-xs text-muted/70 mt-6">
+          localaudit.online · Built for freelancers who close deals
+        </p>
       </div>
     </div>
   );

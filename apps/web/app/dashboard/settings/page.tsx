@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { settingsApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { CheckCircle, AlertCircle, Key, Mail, User } from "lucide-react";
+import { clsx } from "clsx";
 
 interface Settings {
   full_name: string | null;
@@ -56,68 +57,79 @@ export default function SettingsPage() {
     }
   };
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" /></div>;
+  if (loading) return <div className="flex items-center justify-center h-64"><div className="h-8 w-8 rounded-full border-2 border-edge border-t-accent animate-spin" /></div>;
+
+  const StatusCard = ({ ok, title, subtitle }: { ok: boolean; title: string; subtitle: string }) => (
+    <div className={clsx(
+      "card p-4 flex items-center gap-3",
+      ok ? "border-emerald-500/25" : "border-amber-500/25"
+    )}>
+      <div className={clsx(
+        "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl",
+        ok ? "bg-emerald-500/10" : "bg-amber-500/10"
+      )}>
+        {ok ? <CheckCircle className="h-5 w-5 text-emerald-400" /> : <AlertCircle className="h-5 w-5 text-amber-400" />}
+      </div>
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-fg">{title}</p>
+        <p className="text-xs text-muted truncate">{subtitle}</p>
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-6 max-w-2xl">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Settings</h1>
-        <p className="text-slate-500 mt-1">Configure your API keys and email credentials.</p>
+      <div className="animate-fade-up">
+        <h1 className="font-display text-2xl font-bold text-fg">Settings</h1>
+        <p className="text-muted mt-1">Configure your API keys and email credentials.</p>
       </div>
 
       {/* Status badges */}
       <div className="grid grid-cols-2 gap-4">
-        <div className={`card p-4 flex items-center gap-3 ${settings?.anthropic_api_key_set ? "border-green-200 bg-green-50" : "border-amber-200 bg-amber-50"}`}>
-          {settings?.anthropic_api_key_set
-            ? <CheckCircle className="h-5 w-5 text-green-600" />
-            : <AlertCircle className="h-5 w-5 text-amber-500" />}
-          <div>
-            <p className="text-sm font-medium text-slate-900">Anthropic (Claude)</p>
-            <p className="text-xs text-slate-500">{settings?.anthropic_api_key_set ? "API key configured" : "Not configured"}</p>
-          </div>
-        </div>
-        <div className={`card p-4 flex items-center gap-3 ${settings?.gmail_configured ? "border-green-200 bg-green-50" : "border-amber-200 bg-amber-50"}`}>
-          {settings?.gmail_configured
-            ? <CheckCircle className="h-5 w-5 text-green-600" />
-            : <AlertCircle className="h-5 w-5 text-amber-500" />}
-          <div>
-            <p className="text-sm font-medium text-slate-900">Gmail Outreach</p>
-            <p className="text-xs text-slate-500">{settings?.gmail_configured ? settings.gmail_address! : "Not configured"}</p>
-          </div>
-        </div>
+        <StatusCard
+          ok={!!settings?.anthropic_api_key_set}
+          title="Anthropic (Claude)"
+          subtitle={settings?.anthropic_api_key_set ? "API key configured" : "Not configured"}
+        />
+        <StatusCard
+          ok={!!settings?.gmail_configured}
+          title="Gmail Outreach"
+          subtitle={settings?.gmail_configured ? settings!.gmail_address! : "Not configured"}
+        />
       </div>
 
       <form onSubmit={save} className="space-y-6">
         {/* Profile */}
         <div className="card p-6 space-y-4">
-          <h2 className="font-semibold text-slate-900 flex items-center gap-2">
-            <User className="h-4 w-4 text-slate-500" /> Profile
+          <h2 className="font-display font-semibold text-fg flex items-center gap-2">
+            <User className="h-4 w-4 text-muted" /> Profile
           </h2>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Account Email</label>
-            <input className="input bg-slate-50 cursor-not-allowed" value={user?.email || ""} disabled />
+            <label className="label" htmlFor="settings-email">Account Email</label>
+            <input id="settings-email" className="input opacity-60 cursor-not-allowed" value={user?.email || ""} disabled />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
-            <input className="input" value={fullName} onChange={(e) => setFullName(e.target.value)}
+            <label className="label" htmlFor="settings-full-name">Full Name</label>
+            <input id="settings-full-name" className="input" value={fullName} onChange={(e) => setFullName(e.target.value)}
               placeholder="Your name" />
           </div>
         </div>
 
         {/* Anthropic */}
         <div className="card p-6 space-y-4">
-          <h2 className="font-semibold text-slate-900 flex items-center gap-2">
-            <Key className="h-4 w-4 text-slate-500" /> Anthropic API Key
+          <h2 className="font-display font-semibold text-fg flex items-center gap-2">
+            <Key className="h-4 w-4 text-muted" /> Anthropic API Key
           </h2>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-muted">
             Used to generate AI audit reports and outreach emails.
-            Get your key at <strong>console.anthropic.com</strong>.
+            Get your key at <strong className="text-fg">console.anthropic.com</strong>.
           </p>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              API Key {settings?.anthropic_api_key_set && <span className="text-green-600">(set — leave blank to keep current)</span>}
+            <label className="label" htmlFor="settings-anthropic-key">
+              API Key {settings?.anthropic_api_key_set && <span className="text-emerald-400">(set — leave blank to keep current)</span>}
             </label>
             <input
+              id="settings-anthropic-key"
               className="input font-mono"
               type="password"
               value={anthropicKey}
@@ -129,25 +141,26 @@ export default function SettingsPage() {
 
         {/* Gmail */}
         <div className="card p-6 space-y-4">
-          <h2 className="font-semibold text-slate-900 flex items-center gap-2">
-            <Mail className="h-4 w-4 text-slate-500" /> Gmail Outreach
+          <h2 className="font-display font-semibold text-fg flex items-center gap-2">
+            <Mail className="h-4 w-4 text-muted" /> Gmail Outreach
           </h2>
-          <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+          <div className="p-3 rounded-xl border border-accent/25 bg-accent/10 text-sm text-fg">
             Use a Gmail App Password (not your regular password).
             Enable 2FA on your Google account, then go to{" "}
             <strong>myaccount.google.com/apppasswords</strong> to generate one.
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Gmail Address</label>
-            <input className="input" type="email" value={gmailAddress}
+            <label className="label" htmlFor="settings-gmail-address">Gmail Address</label>
+            <input id="settings-gmail-address" className="input" type="email" value={gmailAddress}
               onChange={(e) => setGmailAddress(e.target.value)}
               placeholder="you@gmail.com" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              App Password {settings?.gmail_configured && <span className="text-green-600">(set — leave blank to keep current)</span>}
+            <label className="label" htmlFor="settings-gmail-password">
+              App Password {settings?.gmail_configured && <span className="text-emerald-400">(set — leave blank to keep current)</span>}
             </label>
             <input
+              id="settings-gmail-password"
               className="input font-mono"
               type="password"
               value={gmailPassword}
@@ -162,7 +175,7 @@ export default function SettingsPage() {
             {saving ? "Saving..." : "Save Settings"}
           </button>
           {saved && (
-            <span className="flex items-center gap-1.5 text-sm text-green-600">
+            <span className="flex items-center gap-1.5 text-sm text-emerald-400">
               <CheckCircle className="h-4 w-4" /> Settings saved successfully
             </span>
           )}

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { leadsApi } from "@/lib/api";
 import { ArrowLeft, Mail, ExternalLink, AlertTriangle, CheckCircle, Clock } from "lucide-react";
+import { clsx } from "clsx";
 
 interface Issue {
   code: string;
@@ -36,10 +37,18 @@ interface Lead {
   created_at: string;
 }
 
+// Tailwind's content scanner can't resolve `badge-${priority}` template literals —
+// spelling out the literal class names here keeps .badge-high/.badge-medium in the build.
+const BADGE_CLASS: Record<string, string> = {
+  high: "badge-high",
+  medium: "badge-medium",
+  low: "badge-low",
+};
+
 const SEVERITY_ICON: Record<string, React.ReactNode> = {
-  critical: <AlertTriangle className="h-4 w-4 text-red-500" />,
-  high: <AlertTriangle className="h-4 w-4 text-orange-500" />,
-  medium: <Clock className="h-4 w-4 text-amber-500" />,
+  critical: <AlertTriangle className="h-4 w-4 text-rose-400" />,
+  high: <AlertTriangle className="h-4 w-4 text-orange-400" />,
+  medium: <Clock className="h-4 w-4 text-amber-400" />,
 };
 
 export default function LeadDetailPage() {
@@ -85,46 +94,49 @@ export default function LeadDetailPage() {
     setLead(res.data);
   };
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" /></div>;
-  if (!lead) return <div className="text-center text-slate-500 mt-20">Lead not found.</div>;
+  if (loading) return <div className="flex items-center justify-center h-64"><div className="h-8 w-8 rounded-full border-2 border-edge border-t-accent animate-spin" /></div>;
+  if (!lead) return <div className="text-center text-muted mt-20">Lead not found.</div>;
 
   return (
     <div className="space-y-6">
-      <button onClick={() => router.back()} className="flex items-center gap-2 text-slate-500 hover:text-slate-900 text-sm">
+      <button type="button" onClick={() => router.back()} className="inline-flex items-center gap-2 text-muted hover:text-fg text-sm transition-colors">
         <ArrowLeft className="h-4 w-4" /> Back to Leads
       </button>
 
       {/* Header */}
-      <div className="card p-6">
-        <div className="flex items-start justify-between">
+      <div className="card p-6 animate-fade-up">
+        <div className="flex items-start justify-between flex-wrap gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">{lead.business_name}</h1>
-            <p className="text-slate-500">{lead.category} · {lead.city}</p>
+            <h1 className="font-display text-2xl font-bold text-fg">{lead.business_name}</h1>
+            <p className="text-muted">{lead.category} · {lead.city}</p>
             {lead.website && (
               <a href={lead.website} target="_blank" rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-sm text-brand-600 hover:underline mt-1">
+                className="inline-flex items-center gap-1 text-sm text-accent hover:underline underline-offset-4 mt-1">
                 {lead.website} <ExternalLink className="h-3 w-3" />
               </a>
             )}
           </div>
           <div className="text-right">
-            <div className={`text-4xl font-bold ${(lead.score || 0) <= 40 ? "text-red-500" : (lead.score || 0) <= 70 ? "text-amber-500" : "text-green-500"}`}>
-              {lead.score ?? "?"}<span className="text-lg text-slate-400">/100</span>
+            <div className={clsx(
+              "font-display text-4xl font-bold",
+              (lead.score ?? 0) <= 40 ? "text-rose-400" : (lead.score ?? 0) <= 70 ? "text-amber-400" : "text-emerald-400"
+            )}>
+              {lead.score ?? "?"}<span className="text-lg text-muted">/100</span>
             </div>
-            <div className={`mt-1 badge-${lead.priority || "medium"} text-sm`}>{lead.priority} priority</div>
+            <div className={clsx(BADGE_CLASS[lead.priority || "medium"] || BADGE_CLASS.medium, "mt-1.5 inline-flex text-sm")}>{lead.priority} priority</div>
           </div>
         </div>
 
         {/* Outcome actions */}
-        <div className="flex flex-wrap gap-3 mt-6 pt-5 border-t border-slate-100">
+        <div className="flex flex-wrap gap-3 mt-6 pt-5 border-t border-edge/70">
           {!lead.replied && (
-            <button onClick={markReplied} className="btn-secondary flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-amber-500" /> Mark Replied
+            <button type="button" onClick={markReplied} className="btn-secondary">
+              <CheckCircle className="h-4 w-4 text-amber-400" /> Mark Replied
             </button>
           )}
           {!lead.converted && (
-            <button onClick={markConverted} className="btn-secondary flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-500" /> Mark Converted
+            <button type="button" onClick={markConverted} className="btn-secondary">
+              <CheckCircle className="h-4 w-4 text-emerald-400" /> Mark Converted
             </button>
           )}
           {lead.converted && (
@@ -136,21 +148,21 @@ export default function LeadDetailPage() {
       </div>
 
       {/* Issues */}
-      <div className="card">
-        <div className="p-5 border-b border-slate-200">
-          <h2 className="font-semibold text-slate-900">{lead.issues.length} Issues Found</h2>
+      <div className="card animate-fade-up" style={{ animationDelay: "60ms" }}>
+        <div className="p-5 border-b border-edge/70">
+          <h2 className="font-display font-semibold text-fg">{lead.issues.length} Issues Found</h2>
           {lead.load_time_seconds && (
-            <p className="text-sm text-slate-500 mt-0.5">Page load time: {lead.load_time_seconds}s</p>
+            <p className="text-sm text-muted mt-0.5">Page load time: {lead.load_time_seconds}s</p>
           )}
         </div>
-        <div className="divide-y divide-slate-100">
+        <div className="divide-y divide-edge/60">
           {lead.issues.map((issue) => (
             <div key={issue.code} className="p-5 flex gap-4">
-              <div className="mt-0.5">{SEVERITY_ICON[issue.severity] || <AlertTriangle className="h-4 w-4 text-slate-400" />}</div>
+              <div className="mt-0.5">{SEVERITY_ICON[issue.severity] || <AlertTriangle className="h-4 w-4 text-muted" />}</div>
               <div>
-                <p className="font-medium text-slate-900">{issue.title}</p>
-                <p className="text-sm text-slate-600 mt-0.5">{issue.impact}</p>
-                {issue.detail && <p className="text-xs text-slate-400 mt-1">{issue.detail}</p>}
+                <p className="font-medium text-fg">{issue.title}</p>
+                <p className="text-sm text-muted mt-0.5">{issue.impact}</p>
+                {issue.detail && <p className="text-xs text-muted/70 mt-1">{issue.detail}</p>}
               </div>
             </div>
           ))}
@@ -159,22 +171,22 @@ export default function LeadDetailPage() {
 
       {/* AI Report */}
       {lead.report_text && (
-        <div className="card p-6">
-          <h2 className="font-semibold text-slate-900 mb-3">AI Audit Report</h2>
-          <div className="prose prose-sm max-w-none text-slate-600 whitespace-pre-line">
+        <div className="card p-6 animate-fade-up" style={{ animationDelay: "120ms" }}>
+          <h2 className="font-display font-semibold text-fg mb-3">AI Audit Report</h2>
+          <div className="prose prose-sm max-w-none text-muted whitespace-pre-line">
             {lead.report_text}
           </div>
         </div>
       )}
 
       {/* Outreach */}
-      <div className="card p-6">
-        <h2 className="font-semibold text-slate-900 mb-4">Outreach</h2>
+      <div className="card p-6 animate-fade-up" style={{ animationDelay: "180ms" }}>
+        <h2 className="font-display font-semibold text-fg mb-4">Outreach</h2>
 
         {lead.email ? (
           <>
             <div className="flex flex-wrap items-center gap-3 mb-4">
-              <span className="text-sm text-slate-600">To: <strong>{lead.email}</strong></span>
+              <span className="text-sm text-muted">To: <strong className="text-fg">{lead.email}</strong></span>
               {lead.email_sent && <span className="badge-low">Initial email sent</span>}
               {lead.follow_up_1_sent && <span className="badge-low">Follow-up 1 sent</span>}
               {lead.follow_up_2_sent && <span className="badge-low">Follow-up 2 sent</span>}
@@ -184,28 +196,34 @@ export default function LeadDetailPage() {
               <div className="space-y-3">
                 <div className="flex gap-2">
                   {["problem_loss", "value_first", "curiosity"].map((t) => (
-                    <button key={t} onClick={() => setEmailType(t)}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${emailType === t ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
+                    <button key={t} type="button" onClick={() => setEmailType(t)}
+                      className={clsx(
+                        "px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 capitalize",
+                        emailType === t
+                          ? "bg-gradient-to-r from-accent to-accent2 text-accent-fg shadow-[0_0_16px_-4px_rgb(var(--accent)/0.6)]"
+                          : "bg-surface-2 text-muted hover:text-fg border border-edge"
+                      )}>
                       {t.replace("_", " ")}
                     </button>
                   ))}
                 </div>
 
-                <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
-                  <input type="checkbox" checked={editMode} onChange={(e) => setEditMode(e.target.checked)} />
+                <label className="flex items-center gap-2 text-sm text-muted cursor-pointer">
+                  <input type="checkbox" checked={editMode} onChange={(e) => setEditMode(e.target.checked)}
+                    className="rounded border-edge bg-base-2 text-accent focus:ring-accent/40" />
                   Edit email before sending
                 </label>
 
                 {editMode && (
                   <div className="space-y-2">
-                    <input className="input" placeholder="Subject line" value={customSubject}
+                    <input className="input" aria-label="Subject line" placeholder="Subject line" value={customSubject}
                       onChange={(e) => setCustomSubject(e.target.value)} />
-                    <textarea className="input h-36 resize-none" placeholder="Email body..." value={customBody}
+                    <textarea className="input h-36 resize-none" aria-label="Email body" placeholder="Email body..." value={customBody}
                       onChange={(e) => setCustomBody(e.target.value)} />
                   </div>
                 )}
 
-                <button onClick={sendEmail} disabled={sending} className="btn-primary flex items-center gap-2">
+                <button type="button" onClick={sendEmail} disabled={sending} className="btn-primary">
                   <Mail className="h-4 w-4" />
                   {sending ? "Sending..." : "Send Outreach Email"}
                 </button>
@@ -214,23 +232,25 @@ export default function LeadDetailPage() {
 
             {lead.email_sent && !lead.follow_up_1_sent && (
               <button
+                type="button"
                 onClick={() => leadsApi.sendFollowUp(id, 1).then((r) => setLead(r.data))}
-                className="btn-secondary flex items-center gap-2"
+                className="btn-secondary"
               >
                 <Mail className="h-4 w-4" /> Send Follow-up 1 (Day 3)
               </button>
             )}
             {lead.follow_up_1_sent && !lead.follow_up_2_sent && (
               <button
+                type="button"
                 onClick={() => leadsApi.sendFollowUp(id, 2).then((r) => setLead(r.data))}
-                className="btn-secondary flex items-center gap-2"
+                className="btn-secondary"
               >
                 <Mail className="h-4 w-4" /> Send Follow-up 2 (Final)
               </button>
             )}
           </>
         ) : (
-          <p className="text-slate-500 text-sm">No email address found for this lead. Add one to enable outreach.</p>
+          <p className="text-muted text-sm">No email address found for this lead. Add one to enable outreach.</p>
         )}
       </div>
     </div>

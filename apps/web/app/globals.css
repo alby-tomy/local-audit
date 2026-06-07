@@ -2,36 +2,177 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --foreground: #0f172a;
-  --background: #f8fafc;
+/* ───────────────────────────────────────────────────────────────────────────
+   Theme tokens — three switchable looks, all defined as RGB triplets so
+   Tailwind's `rgb(var(--x) / <alpha-value>)` pattern supports opacity utilities.
+   Default (no attribute yet / SSR) falls back to "neon".
+   ─────────────────────────────────────────────────────────────────────────── */
+:root,
+[data-theme="neon"] {
+  --base: 6 8 16;
+  --base-2: 11 15 28;
+  --surface: 17 23 41;
+  --surface-2: 27 35 60;
+  --fg: 226 232 240;
+  --muted: 148 163 184;
+  --edge: 51 65 96;
+  --accent: 34 211 238;      /* cyan-400 */
+  --accent-2: 167 139 250;   /* violet-400 */
+  --accent-fg: 6 12 24;
+  --orb-opacity: 0.35;
+  --orb-opacity-2: 0.2;
+}
+
+[data-theme="aurora"] {
+  --base: 247 248 252;
+  --base-2: 237 240 250;
+  --surface: 255 255 255;
+  --surface-2: 244 246 253;
+  --fg: 15 23 42;
+  --muted: 100 116 139;
+  --edge: 224 229 240;
+  --accent: 59 130 246;      /* blue-500 */
+  --accent-2: 236 72 153;    /* pink-500 */
+  --accent-fg: 255 255 255;
+  --orb-opacity: 0.22;
+  --orb-opacity-2: 0.14;
+}
+
+[data-theme="mono"] {
+  --base: 10 12 16;
+  --base-2: 15 18 24;
+  --surface: 19 22 29;
+  --surface-2: 28 32 41;
+  --fg: 226 232 240;
+  --muted: 139 148 161;
+  --edge: 40 45 56;
+  --accent: 99 102 241;      /* indigo-500 */
+  --accent-2: 99 102 241;    /* monochrome — single accent */
+  --accent-fg: 255 255 255;
+  --orb-opacity: 0.16;
+  --orb-opacity-2: 0.1;
+}
+
+* {
+  border-color: rgb(var(--edge));
+}
+
+html {
+  color-scheme: dark;
+}
+[data-theme="aurora"] {
+  color-scheme: light;
 }
 
 body {
-  background-color: var(--background);
-  color: var(--foreground);
+  background-color: rgb(var(--base));
+  color: rgb(var(--fg));
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+::selection {
+  background-color: rgb(var(--accent) / 0.35);
+  color: rgb(var(--fg));
+}
+
+/* Slim, theme-aware scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--edge));
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--muted));
 }
 
 @layer components {
-  .btn-primary {
-    @apply bg-brand-600 hover:bg-brand-700 text-white font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
-  }
-  .btn-secondary {
-    @apply bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-medium px-4 py-2 rounded-lg transition-colors;
+  /* ── Surfaces ─────────────────────────────────────────────────────────── */
+  .glass {
+    @apply bg-surface/70 backdrop-blur-xl border border-edge/70;
   }
   .card {
-    @apply bg-white rounded-xl border border-slate-200 shadow-sm;
+    @apply glass rounded-2xl shadow-[0_8px_30px_-14px_rgb(0_0_0_/_0.45)];
   }
+  .card-hover {
+    @apply transition-all duration-300 hover:border-accent/40 hover:shadow-[0_12px_40px_-12px_rgb(var(--accent)/0.35)] hover:-translate-y-0.5;
+  }
+
+  /* ── Buttons ──────────────────────────────────────────────────────────── */
+  .btn-primary {
+    @apply relative inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5
+           font-semibold text-accent-fg whitespace-nowrap
+           bg-gradient-to-r from-accent to-accent2 bg-[length:160%_100%] bg-left
+           shadow-[0_0_0_1px_rgb(var(--accent)/0.3),0_8px_24px_-8px_rgb(var(--accent)/0.6)]
+           transition-all duration-300 ease-out
+           hover:bg-right hover:shadow-[0_0_0_1px_rgb(var(--accent)/0.5),0_10px_32px_-6px_rgb(var(--accent)/0.8)] hover:-translate-y-0.5
+           active:translate-y-0
+           disabled:opacity-50 disabled:pointer-events-none disabled:translate-y-0;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5
+           font-medium text-fg whitespace-nowrap
+           border border-edge bg-surface/60 backdrop-blur-sm
+           transition-all duration-200
+           hover:border-accent/50 hover:bg-surface-2 hover:text-fg
+           disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2
+           font-medium text-muted transition-all duration-200
+           hover:text-fg hover:bg-surface-2;
+  }
+
+  /* ── Forms ────────────────────────────────────────────────────────────── */
   .input {
-    @apply w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent;
+    @apply w-full rounded-xl border border-edge bg-base-2/60 px-3.5 py-2.5 text-sm text-fg
+           placeholder:text-muted/70 transition-all duration-200
+           focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent/60;
   }
+  .label {
+    @apply block text-sm font-medium text-muted mb-1.5;
+  }
+
+  /* ── Badges ───────────────────────────────────────────────────────────── */
   .badge-high {
-    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700;
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium
+           bg-rose-500/10 text-rose-400 border border-rose-500/25;
   }
   .badge-medium {
-    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700;
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium
+           bg-amber-500/10 text-amber-400 border border-amber-500/25;
   }
   .badge-low {
-    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700;
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium
+           bg-emerald-500/10 text-emerald-400 border border-emerald-500/25;
+  }
+
+  /* ── Text effects ─────────────────────────────────────────────────────── */
+  .gradient-text {
+    @apply bg-gradient-to-r from-accent via-accent to-accent2 bg-clip-text text-transparent;
+  }
+  .glow-ring {
+    @apply shadow-[0_0_0_1px_rgb(var(--accent)/0.4),0_0_24px_-4px_rgb(var(--accent)/0.5)];
+  }
+
+  /* Shimmering skeleton / loading-bar effect, theme-aware */
+  .shimmer {
+    @apply relative overflow-hidden bg-surface-2;
+  }
+  .shimmer::after {
+    content: "";
+    @apply absolute inset-0 animate-shimmer;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgb(var(--accent) / 0.18) 50%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
   }
 }
