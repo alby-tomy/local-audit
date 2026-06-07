@@ -1,7 +1,0 @@
-name = "localaudit-edge"
-main = "src/index.ts"
-compatibility_date = "2026-01-01"
-
-[vars]
-API_ORIGIN = "https://api.localauditai.com"
-WEB_ORIGIN = "https://app.localauditai.com"

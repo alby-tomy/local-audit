@@ -1,15 +1,21 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
+import { AuthProvider } from "@/lib/auth";
+
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "LocalAudit AI",
-  description: "Automated website audits and AI-powered fixes for local businesses.",
+  title: "LocalAudit AI — Automated Lead Generation",
+  description: "Find local businesses losing customers online. Generate AI-powered audits and send high-converting outreach.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body className={inter.className}>
+        <AuthProvider>{children}</AuthProvider>
+      </body>
     </html>
   );
 }

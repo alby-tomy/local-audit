@@ -1,102 +1,110 @@
-from __future__ import annotations
+"""
+Authentication and authorisation utilities.
 
-import hashlib
-from dataclasses import dataclass
-from uuid import UUID
+Provides:
+- Password hashing / verification via bcrypt
+- JWT creation and decoding
+- FastAPI dependency `get_current_user` that guards protected routes
+"""
 
-import jwt
-from fastapi import Depends, Header, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+import logging
+from datetime import datetime, timedelta, timezone
+
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+from jose import JWTError, jwt
+from passlib.context import CryptContext
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import get_settings
-from .database import DatabaseClient, get_db
+from .database import get_db
+
+logger = logging.getLogger(__name__)
+settings = get_settings()
+
+# bcrypt is the industry standard for password hashing.
+# The "deprecated=auto" flag means older hashes are re-hashed on next login.
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
 
 
-security = HTTPBearer(auto_error=False)
+# ── Password helpers ─────────────────────────────────────────────────────────
+
+def hash_password(plain: str) -> str:
+    """Return a bcrypt hash of *plain*.  Never store raw passwords."""
+    return pwd_context.hash(plain)
 
 
-@dataclass
-class TenantContext:
-    id: UUID
-    subscription_status: str
-    credits_used: int
-    credits_limit: int
+def verify_password(plain: str, hashed: str) -> bool:
+    """Return True if *plain* matches the stored *hashed* password."""
+    return pwd_context.verify(plain, hashed)
 
 
-def _api_key_hash(raw_key: str) -> str:
-    return hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
+# ── JWT helpers ──────────────────────────────────────────────────────────────
+
+def create_access_token(subject: str) -> str:
+    """Create a signed JWT containing *subject* (typically the user's UUID).
+
+    The token includes an expiry so compromised tokens have a limited window.
+    """
+    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.JWT_EXPIRE_MINUTES)
+    payload = {"sub": subject, "exp": expire}
+    return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
 
 
-async def _tenant_from_api_key(api_key: str, db: DatabaseClient) -> TenantContext | None:
-    key_hash = _api_key_hash(api_key)
-    row = await db.fetch_one(
-        """
-        SELECT t.id, t.subscription_status, t.credits_used, t.credits_limit
-        FROM api_keys ak
-        JOIN tenants t ON t.id = ak.tenant_id
-        WHERE ak.key_hash = $1
-          AND ak.is_active = TRUE
-          AND (ak.expires_at IS NULL OR ak.expires_at > NOW())
-        """,
-        key_hash,
-    )
-    if not row:
-        return None
-    return TenantContext(
-        id=row["id"],
-        subscription_status=row["subscription_status"] or "inactive",
-        credits_used=row["credits_used"] or 0,
-        credits_limit=row["credits_limit"] or 0,
-    )
+def decode_token(token: str) -> str:
+    """Decode *token* and return the subject claim.
 
-
-async def get_current_tenant(
-    credentials: HTTPAuthorizationCredentials | None = Depends(security),
-    x_api_key: str | None = Header(default=None, alias="x-api-key"),
-    db: DatabaseClient = Depends(get_db),
-) -> TenantContext:
-    settings = get_settings()
-
-    if x_api_key:
-        tenant = await _tenant_from_api_key(x_api_key, db)
-        if tenant:
-            return tenant
-
-    if not credentials or not credentials.credentials:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
-
+    Raises HTTPException 401 on any invalid / expired token so that the
+    caller never needs to handle raw JWTError.
+    """
     try:
         payload = jwt.decode(
-            credentials.credentials,
-            settings.JWT_SECRET,
-            algorithms=["HS256"],
-            options={"verify_aud": False},
+            token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM]
         )
-    except jwt.PyJWTError as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from exc
-
-    tenant_id = payload.get("tenant_id")
-    if not tenant_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant missing in token")
-
-    row = await db.fetch_one(
-        "SELECT id, subscription_status, credits_used, credits_limit FROM tenants WHERE id = $1",
-        tenant_id,
-    )
-    if not row:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
-
-    return TenantContext(
-        id=row["id"],
-        subscription_status=row["subscription_status"] or "inactive",
-        credits_used=row["credits_used"] or 0,
-        credits_limit=row["credits_limit"] or 0,
-    )
+        subject: str | None = payload.get("sub")
+        if subject is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token missing subject claim",
+            )
+        return subject
+    except JWTError as exc:
+        logger.warning("JWT decode failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
-async def check_credits(tenant: TenantContext, db: DatabaseClient) -> bool:  # noqa: ARG001
-    if tenant.subscription_status not in {"active", "trialing"}:
-        return False
-    if tenant.credits_limit <= 0:
-        return False
-    return tenant.credits_used < tenant.credits_limit
+# ── FastAPI dependency ────────────────────────────────────────────────────────
+
+async def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: AsyncSession = Depends(get_db),
+):
+    """FastAPI dependency: decode the Bearer token and return the active User.
+
+    Import the User model inline to avoid circular imports at module load time.
+    """
+    from ..models.user import User  # local import prevents circular dependency
+
+    user_id = decode_token(token)
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is disabled",
+        )
+    return user

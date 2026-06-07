@@ -1,13 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.env
+!.env.example
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+
+# Node / Next.js
 node_modules/
 .next/
 out/
-coverage/
-.env
-.env.local
-.env.*.local
-__pycache__/
-*.pyc
-.venv/
-.pytest_cache/
+.turbo/
+*.tsbuildinfo
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
 .DS_Store
-*.log
+Thumbs.db
+
+# Secrets
+*.pem
+*.key
+secrets/
+
+# Playwright
+playwright-report/
+test-results/

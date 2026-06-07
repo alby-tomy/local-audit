@@ -1,23 +1,22 @@
-import Link from "next/link";
+"use client";
 
-export default function HomePage() {
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth";
+
+export default function Home() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading) {
+      router.replace(user ? "/dashboard" : "/login");
+    }
+  }, [user, loading, router]);
+
   return (
-    <main className="container">
-      <div className="card">
-        <h1>LocalAudit AI</h1>
-        <p>Multi-tenant SaaS for automated audits, AI fix generation, and client delivery workflows.</p>
-        <div style={{ display: "flex", gap: 12 }}>
-          <Link className="button" href="/pricing">
-            View Pricing
-          </Link>
-          <Link className="button" href="/dashboard">
-            Open Dashboard
-          </Link>
-          <Link className="button" href="/privacy">
-            Privacy
-          </Link>
-        </div>
-      </div>
-    </main>
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-600" />
+    </div>
   );
 }

@@ -1,14 +1,11 @@
 {
-  "name": "localaudit-saas",
+  "name": "localaudit-ai",
+  "version": "1.0.0",
   "private": true,
-  "workspaces": [
-    "apps/web",
-    "workers"
-  ],
   "scripts": {
-    "dev:web": "npm --workspace apps/web run dev",
-    "dev:worker": "npm --workspace workers run dev",
-    "build:web": "npm --workspace apps/web run build",
-    "build:worker": "npm --workspace workers run build"
+    "dev:api": "uvicorn apps.api.main:app --reload --host 0.0.0.0 --port 8000",
+    "dev:web": "cd apps/web && npm run dev",
+    "install:web": "cd apps/web && npm install",
+    "build:web": "cd apps/web && npm run build"
   }
 }

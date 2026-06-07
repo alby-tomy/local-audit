@@ -1,60 +1,76 @@
-from __future__ import annotations
+"""
+Async SQLAlchemy database engine and session factory.
 
-from typing import Any
+Uses aiosqlite in development (zero-config) and asyncpg in production.
+All database access goes through the `get_db` dependency injected into
+FastAPI route handlers — this guarantees each request gets its own
+session that is properly closed even on exception.
+"""
 
-import asyncpg
+from contextlib import asynccontextmanager
+from typing import AsyncGenerator
+
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+from sqlalchemy.orm import DeclarativeBase
 
 from .config import get_settings
 
-
-class DatabaseClient:
-    def __init__(self, pool: asyncpg.Pool):
-        self._pool = pool
-
-    async def fetch_one(self, query: str, *args: Any) -> dict[str, Any] | None:
-        async with self._pool.acquire() as conn:
-            row = await conn.fetchrow(query, *args)
-            return dict(row) if row else None
-
-    async def fetch_all(self, query: str, *args: Any) -> list[dict[str, Any]]:
-        async with self._pool.acquire() as conn:
-            rows = await conn.fetch(query, *args)
-            return [dict(row) for row in rows]
-
-    async def execute(self, query: str, *args: Any) -> str:
-        async with self._pool.acquire() as conn:
-            return await conn.execute(query, *args)
+settings = get_settings()
 
 
-_pool: asyncpg.Pool | None = None
-_db: DatabaseClient | None = None
+class Base(DeclarativeBase):
+    """Shared declarative base for all ORM models."""
+    pass
+
+
+# SQLite needs check_same_thread=False; PostgreSQL ignores it.
+_connect_args = (
+    {"check_same_thread": False}
+    if settings.DATABASE_URL.startswith("sqlite")
+    else {}
+)
+
+engine = create_async_engine(
+    settings.DATABASE_URL,
+    connect_args=_connect_args,
+    # Echo SQL only in dev — avoids leaking queries in production logs
+    echo=settings.APP_ENV == "development",
+)
+
+AsyncSessionLocal = async_sessionmaker(
+    bind=engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+    autocommit=False,
+    autoflush=False,
+)
 
 
 async def init_db() -> None:
-    global _pool, _db
-    if _pool is not None:
-        return
-    settings = get_settings()
-    # Supabase pooler/PgBouncer compatibility:
-    # disable asyncpg statement cache to avoid prepared statement errors.
-    _pool = await asyncpg.create_pool(
-        settings.DATABASE_URL,
-        min_size=1,
-        max_size=10,
-        statement_cache_size=0,
-    )
-    _db = DatabaseClient(_pool)
+    """Create all tables on startup if they do not exist yet.
+
+    In production, prefer running Alembic migrations instead of calling this.
+    """
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
 
-async def close_db() -> None:
-    global _pool, _db
-    if _pool is not None:
-        await _pool.close()
-    _pool = None
-    _db = None
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    """FastAPI dependency that yields a scoped async DB session.
 
-
-async def get_db() -> DatabaseClient:
-    if _db is None:
-        raise RuntimeError("Database is not initialized")
-    return _db
+    The session is automatically rolled back on exception and closed
+    after the request completes, preventing connection leaks.
+    """
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()

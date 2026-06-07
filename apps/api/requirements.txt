@@ -1,15 +1,32 @@
-fastapi==0.115.12
-uvicorn[standard]==0.34.2
-pydantic==2.11.4
-pydantic-settings==2.9.1
-asyncpg==0.30.0
-redis==6.0.0
-httpx==0.28.1
-PyJWT==2.10.1
-anthropic==0.52.0
-boto3==1.38.14
-botocore==1.38.14
-beautifulsoup4==4.13.4
+# ── Web framework ─────────────────────────────────────────────────────────────
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+python-multipart==0.0.12
+
+# ── Database ──────────────────────────────────────────────────────────────────
+sqlalchemy[asyncio]==2.0.35
+aiosqlite==0.20.0           # SQLite async driver (development / default)
+# asyncpg==0.29.0           # PostgreSQL async driver — uncomment for production (requires C compiler)
+alembic==1.13.3             # Database migrations
+
+# ── Auth ──────────────────────────────────────────────────────────────────────
+# bcrypt is pinned below 4.1 because passlib 1.7.4's backend detection
+# raises "password cannot be longer than 72 bytes" with bcrypt>=4.1.
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+python-jose[cryptography]==3.3.0
+
+# ── Config ────────────────────────────────────────────────────────────────────
+pydantic-settings==2.5.2
+pydantic[email]==2.9.2
+
+# ── HTTP / Scraping ───────────────────────────────────────────────────────────
 requests==2.32.3
-playwright==1.52.0
-python-multipart==0.0.20
+beautifulsoup4==4.12.3
+lxml==5.3.0
+
+# ── AI ───────────────────────────────────────────────────────────────────────
+anthropic==0.40.0
+
+# ── Async utils ──────────────────────────────────────────────────────────────
+anyio==4.6.2
