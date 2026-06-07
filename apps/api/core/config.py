@@ -9,6 +9,7 @@ so that no service module ever hard-codes a credential.
 from functools import lru_cache
 from typing import Literal
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -22,6 +23,18 @@ class Settings(BaseSettings):
     # ── Database ──────────────────────────────────────────────────────────
     # Falls back to a local SQLite file so the app runs with zero infra setup.
     DATABASE_URL: str = "sqlite+aiosqlite:///./localaudit.db"
+
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def _default_database_url_if_blank(cls, value: str | None) -> str:
+        """Treat an empty DATABASE_URL in .env as "use the SQLite default".
+
+        Without this, `DATABASE_URL=` (present but blank) overrides the
+        Python default with `''`, which SQLAlchemy cannot parse.
+        """
+        if not value or not value.strip():
+            return "sqlite+aiosqlite:///./localaudit.db"
+        return value
 
     # ── Security ──────────────────────────────────────────────────────────
     JWT_SECRET: str = "changeme-set-a-real-secret-in-production"

@@ -27,7 +27,7 @@ from ..models.lead import Lead, LeadStatus
 from .ai_service import generate_outreach_email
 from .outreach import send_initial_outreach
 from .report_generator import build_lead_data
-from .scraper import scrape_google_search
+from .scraper import discover_businesses
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -121,7 +121,7 @@ async def run_pipeline(
         run.log(f"Discovering {niche} businesses in {city}...")
         loop = asyncio.get_event_loop()
         businesses: list[dict[str, Any]] = await loop.run_in_executor(
-            None, lambda: scrape_google_search(niche, city, num_leads)
+            None, lambda: discover_businesses(niche, city, num_leads)
         )
         run.total_discovered = len(businesses)
         run.log(f"Found {len(businesses)} businesses to analyze.")
