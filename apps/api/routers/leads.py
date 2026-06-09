@@ -78,6 +78,7 @@ async def list_leads(
     result = await db.execute(q)
     leads = result.scalars().all()
 
+    logger.info("Listed %d/%d leads for user %s", len(leads), total, current_user.id)
     return LeadListResponse(total=total, leads=[_to_response(l) for l in leads])
 
 
@@ -148,6 +149,7 @@ async def update_lead(
 
     await db.commit()
     await db.refresh(lead)
+    logger.info("Lead %s (%s) updated by user %s", lead.id, lead.business_name, current_user.id)
     return _to_response(lead)
 
 
@@ -158,8 +160,10 @@ async def delete_lead(
     db: AsyncSession = Depends(get_db),
 ):
     lead = await _get_owned_lead(lead_id, current_user.id, db)
+    business_name = lead.business_name
     await db.delete(lead)
     await db.commit()
+    logger.info("Lead %s (%s) deleted by user %s", lead_id, business_name, current_user.id)
 
 
 @router.post("/{lead_id}/send", response_model=LeadResponse)
@@ -216,6 +220,7 @@ async def send_outreach(
         lead.status = LeadStatus.CONTACTED
         await db.commit()
         await db.refresh(lead)
+        logger.info("Outreach email sent to %s (%s) for lead %s", lead.email, lead.business_name, lead.id)
     else:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -251,6 +256,7 @@ async def send_follow_up_email(
             lead.follow_up_2_sent_at = datetime.now(timezone.utc)
         await db.commit()
         await db.refresh(lead)
+        logger.info("Follow-up %d sent to %s (%s)", follow_up_number, lead.email, lead.business_name)
 
     return _to_response(lead)
 
