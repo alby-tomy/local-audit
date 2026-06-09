@@ -17,9 +17,10 @@ import asyncio
 import logging
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.config import get_settings
@@ -117,132 +118,155 @@ async def run_pipeline(
     """
 
     try:
-        # ── Phase 1: Discovery ────────────────────────────────────────────
-        run.log(f"Discovering {niche} businesses in {city}...")
         loop = asyncio.get_event_loop()
-        businesses: list[dict[str, Any]] = await loop.run_in_executor(
-            None, lambda: discover_businesses(niche, city, num_leads)
-        )
-        run.total_discovered = len(businesses)
-        run.log(f"Found {len(businesses)} businesses to analyze.")
 
-        if not businesses:
-            run.log("No businesses found. Try a different niche or city.")
-            run.status = "completed"
-            run.completed_at = datetime.now(timezone.utc)
-            return run
+        # Support comma-separated locations: "delhi, mumbai" or "india, usa"
+        locations = [loc.strip() for loc in city.split(",") if loc.strip()]
 
-        # ── Phase 2: Analyze each business ────────────────────────────────
-        for i, biz in enumerate(businesses, 1):
-            website = biz.get("website")
-            name = biz.get("business_name", "Unknown")
+        for location in locations:
+            # ── Phase 1: Discovery ────────────────────────────────────────
+            if len(locations) > 1:
+                run.log(f"── Location: {location} ──────────────────────────")
+            run.log(f"Discovering {niche} businesses in {location}...")
 
-            if not website:
-                run.log(f"[{i}/{len(businesses)}] Skipping {name} — no website found.")
-                run.total_skipped += 1
+            businesses: list[dict[str, Any]] = await loop.run_in_executor(
+                None, lambda loc=location: discover_businesses(niche, loc, num_leads)
+            )
+            run.total_discovered += len(businesses)
+            run.log(f"Found {len(businesses)} businesses to analyze.")
+
+            if not businesses:
+                run.log(f"No businesses found in {location}. Try a different niche or city.")
                 continue
 
-            run.log(f"[{i}/{len(businesses)}] Analyzing {name} ({website})...")
+            # ── Phase 2: Analyze each business ───────────────────────────
+            for i, biz in enumerate(businesses, 1):
+                website = biz.get("website")
+                name = biz.get("business_name", "Unknown")
 
-            try:
-                lead_data = await build_lead_data(
-                    business_name=name,
-                    website=website,
-                    city=city,
-                    category=niche,
-                    phone=biz.get("phone", ""),
-                    anthropic_api_key=anthropic_api_key,
+                if not website:
+                    run.log(f"[{i}/{len(businesses)}] Skipping {name} — no website found.")
+                    run.total_skipped += 1
+                    continue
+
+                run.log(f"[{i}/{len(businesses)}] Analyzing {name} ({website})...")
+
+                try:
+                    lead_data = await build_lead_data(
+                        business_name=name,
+                        website=website,
+                        city=location,
+                        category=niche,
+                        phone=biz.get("phone", ""),
+                        anthropic_api_key=anthropic_api_key,
+                    )
+                except Exception as exc:
+                    run.log(f"  ERROR analyzing {name}: {exc}")
+                    run.total_skipped += 1
+                    continue
+
+                score = lead_data.get("score", 100)
+                issues = lead_data.get("issues", [])
+                issue_count = len(issues)
+                run.log(f"  Score: {score}/100, Issues: {issue_count}")
+
+                # A site that's down entirely is the single strongest pitch a
+                # local-audit outreach can make ("your website isn't loading —
+                # you're losing 100% of your traffic"), even though the analyzer
+                # only logs one "broken_page" issue (the other checks can't run
+                # on a page that never loaded). Treat it as an automatic qualifier
+                # so the issue-count filter below doesn't discard these top leads.
+                is_broken_page = any(issue.get("code") == "broken_page" for issue in issues)
+
+                # ── Phase 3: Filter — skip healthy sites ──────────────────
+                if score > settings.MAX_LEAD_SCORE:
+                    run.log(f"  Skipping {name} — score {score} is above threshold ({settings.MAX_LEAD_SCORE}).")
+                    run.total_skipped += 1
+                    lead_data["status"] = LeadStatus.IGNORED
+                    await _save_lead(db, user_id, lead_data)
+                    continue
+
+                if issue_count < settings.MIN_ISSUES_TO_CONTACT and not is_broken_page:
+                    run.log(f"  Skipping {name} — only {issue_count} issues (minimum: {settings.MIN_ISSUES_TO_CONTACT}).")
+                    run.total_skipped += 1
+                    lead_data["status"] = LeadStatus.IGNORED
+                    await _save_lead(db, user_id, lead_data)
+                    continue
+
+                run.total_analyzed += 1
+
+                # ── Phase 4: Save to database ──────────────────────────────
+                lead = await _save_lead(db, user_id, lead_data)
+                if not lead:
+                    continue
+
+                # ── Phase 5: Send outreach email ───────────────────────────
+                if not send_emails:
+                    run.log(f"  Lead saved. Email sending is disabled for this run.")
+                    continue
+
+                if not lead.email:
+                    run.log(f"  No email address found for {name} — skipping outreach.")
+                    continue
+
+                # ── Phase 5a: Cooldown — don't re-email a recently contacted org ──
+                cooldown_cutoff = datetime.now(timezone.utc) - timedelta(days=settings.EMAIL_COOLDOWN_DAYS)
+                recent_contact = await db.execute(
+                    select(Lead.id).where(
+                        Lead.user_id == user_id,
+                        Lead.email == lead.email,
+                        Lead.email_sent_at.is_not(None),
+                        Lead.email_sent_at > cooldown_cutoff,
+                    ).limit(1)
                 )
-            except Exception as exc:
-                run.log(f"  ERROR analyzing {name}: {exc}")
-                run.total_skipped += 1
-                continue
+                if recent_contact.scalar_one_or_none():
+                    run.log(
+                        f"  Skipping {name} — {lead.email} was already contacted within "
+                        f"the last {settings.EMAIL_COOLDOWN_DAYS} days."
+                    )
+                    run.total_skipped += 1
+                    continue
 
-            score = lead_data.get("score", 100)
-            issues = lead_data.get("issues", [])
-            issue_count = len(issues)
-            run.log(f"  Score: {score}/100, Issues: {issue_count}")
+                run.log(f"  Generating {email_type} email for {name}...")
+                try:
+                    email_content = await loop.run_in_executor(
+                        None,
+                        lambda l=lead: generate_outreach_email(
+                            email_type=email_type,
+                            business_name=l.business_name,
+                            city=l.city or "",
+                            issues=l.issues,
+                            score=l.score or 50,
+                            load_time=l.load_time_seconds,
+                            api_key=anthropic_api_key,
+                        ),
+                    )
+                except Exception as exc:
+                    run.log(f"  Email generation failed for {name}: {exc}")
+                    continue
 
-            # A site that's down entirely is the single strongest pitch a
-            # local-audit outreach can make ("your website isn't loading —
-            # you're losing 100% of your traffic"), even though the analyzer
-            # only logs one "broken_page" issue (the other checks can't run
-            # on a page that never loaded). Treat it as an automatic qualifier
-            # so the issue-count filter below doesn't discard these top leads.
-            is_broken_page = any(issue.get("code") == "broken_page" for issue in issues)
-
-            # ── Phase 3: Filter — skip healthy sites ─────────────────────
-            if score > settings.MAX_LEAD_SCORE:
-                run.log(f"  Skipping {name} — score {score} is above threshold ({settings.MAX_LEAD_SCORE}).")
-                run.total_skipped += 1
-                # Still save the lead but mark as ignored
-                lead_data["status"] = LeadStatus.IGNORED
-                await _save_lead(db, user_id, lead_data)
-                continue
-
-            if issue_count < settings.MIN_ISSUES_TO_CONTACT and not is_broken_page:
-                run.log(f"  Skipping {name} — only {issue_count} issues (minimum: {settings.MIN_ISSUES_TO_CONTACT}).")
-                run.total_skipped += 1
-                lead_data["status"] = LeadStatus.IGNORED
-                await _save_lead(db, user_id, lead_data)
-                continue
-
-            run.total_analyzed += 1
-
-            # ── Phase 4: Save to database ─────────────────────────────────
-            lead = await _save_lead(db, user_id, lead_data)
-            if not lead:
-                continue
-
-            # ── Phase 5: Send outreach email ──────────────────────────────
-            if not send_emails:
-                run.log(f"  Lead saved. Email sending is disabled for this run.")
-                continue
-
-            if not lead.email:
-                run.log(f"  No email address found for {name} — skipping outreach.")
-                continue
-
-            run.log(f"  Generating {email_type} email for {name}...")
-            try:
-                email_content = await loop.run_in_executor(
+                sent = await loop.run_in_executor(
                     None,
-                    lambda l=lead: generate_outreach_email(
-                        email_type=email_type,
-                        business_name=l.business_name,
-                        city=l.city or "",
-                        issues=l.issues,
-                        score=l.score or 50,
-                        load_time=l.load_time_seconds,
-                        api_key=anthropic_api_key,
+                    lambda l=lead, ec=email_content: send_initial_outreach(
+                        lead=l,
+                        email_content=ec,
+                        gmail_address=gmail_address,
+                        gmail_app_password=gmail_app_password,
                     ),
                 )
-            except Exception as exc:
-                run.log(f"  Email generation failed for {name}: {exc}")
-                continue
 
-            sent = await loop.run_in_executor(
-                None,
-                lambda l=lead, ec=email_content: send_initial_outreach(
-                    lead=l,
-                    email_content=ec,
-                    gmail_address=gmail_address,
-                    gmail_app_password=gmail_app_password,
-                ),
-            )
+                if sent:
+                    lead.email_sent = True
+                    lead.email_sent_at = datetime.now(timezone.utc)
+                    lead.status = LeadStatus.CONTACTED
+                    await db.commit()
+                    run.total_contacted += 1
+                    run.log(f"  Outreach email sent to {lead.email}")
+                else:
+                    run.log(f"  Failed to send email to {lead.email}")
 
-            if sent:
-                lead.email_sent = True
-                lead.email_sent_at = datetime.now(timezone.utc)
-                lead.status = LeadStatus.CONTACTED
-                await db.commit()
-                run.total_contacted += 1
-                run.log(f"  Outreach email sent to {lead.email}")
-            else:
-                run.log(f"  Failed to send email to {lead.email}")
-
-            # Polite delay between business analyses
-            await asyncio.sleep(1)
+                # Polite delay between business analyses
+                await asyncio.sleep(1)
 
         # ── Complete ──────────────────────────────────────────────────────
         run.status = "completed"

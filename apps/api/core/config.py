@@ -62,6 +62,9 @@ class Settings(BaseSettings):
     # Follow-up delay in days
     FOLLOW_UP_1_DAYS: int = 3
     FOLLOW_UP_2_DAYS: int = 7
+    # Don't re-email a business we've already contacted within this many days,
+    # even if a re-scan rediscovers it as a "new" lead
+    EMAIL_COOLDOWN_DAYS: int = 15
 
     model_config = SettingsConfigDict(
         env_file=".env",

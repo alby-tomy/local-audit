@@ -129,15 +129,16 @@ export default function PipelinePage() {
               </div>
 
               <div>
-                <label className="label" htmlFor="pipeline-city">City *</label>
+                <label className="label" htmlFor="pipeline-city">Location(s) *</label>
                 <input
                   id="pipeline-city"
                   className="input"
-                  placeholder="e.g. Manchester"
+                  placeholder="e.g. Manchester or delhi, mumbai, usa"
                   value={city}
                   onChange={(e) => setCity(e.target.value)}
                   required
                 />
+                <p className="text-xs text-muted mt-1.5">Separate multiple locations with commas to scan them in one run.</p>
               </div>
 
               <div>
@@ -206,7 +207,11 @@ export default function PipelinePage() {
                   <StatusIcon status={activeRun.status} />
                   <div>
                     <p className="font-display font-semibold text-fg">{activeRun.niche} in {activeRun.city}</p>
-                    <p className="text-xs text-muted">Run ID: {activeRun.run_id.slice(0, 8)}</p>
+                    <p className="text-xs text-muted">
+                      {activeRun.city.includes(",")
+                        ? `${activeRun.city.split(",").length} locations · Run ${activeRun.run_id.slice(0, 8)}`
+                        : `Run ID: ${activeRun.run_id.slice(0, 8)}`}
+                    </p>
                   </div>
                 </div>
                 <button type="button" title={showLogs ? "Hide logs" : "Show logs"} onClick={() => setShowLogs(!showLogs)} className="text-muted hover:text-fg transition-colors">
@@ -257,7 +262,7 @@ export default function PipelinePage() {
                 <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-accent/10 mb-4">
                   <Zap className="h-8 w-8 text-accent" />
                 </div>
-                <p className="font-medium text-fg">Configure a niche and city,</p>
+                <p className="font-medium text-fg">Configure a niche and location(s),</p>
                 <p className="text-muted text-sm mt-0.5">then click Start Pipeline to begin.</p>
               </div>
             </div>

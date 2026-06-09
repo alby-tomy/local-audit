@@ -40,7 +40,10 @@ We found {issue_count} issues on {website} that are likely costing you leads —
 Happy to walk you through the fixes on a quick 15-minute call. No obligation.
 
 Best,
-The LocalAudit AI Team"""
+Alby Tomy,
+Freelancer Software Engineer,
+alby.u.tomy@gmail.com
+https://www.alby-tomy.online/"""
 
 _FOLLOWUP_2_TEMPLATE = """Subject: One last thing — quick fix for {business_name}
 
@@ -53,7 +56,10 @@ We noticed your website still has some quick wins that could bring in more custo
 If you'd like a free 10-minute breakdown of what to fix first, just reply "yes" and I'll send it over.
 
 Best,
-The LocalAudit AI Team"""
+Alby Tomy,
+Freelancer Software Engineer,
+alby.u.tomy@gmail.com
+https://www.alby-tomy.online/"""
 
 
 def send_email(

@@ -187,7 +187,7 @@ IMPORTANT RULES — follow this narrative structure:
 - Close by asking: "Would you be open to a quick 10-minute chat this week?"
 - Do NOT use fake names or "Dear Sir/Madam"
 - Do NOT claim to be their customer or existing relationship
-- Sign off EXACTLY as: "Best,\nAlby Tomy,\nFreelancer Software Engineer,\nalby.u.tomy@gmail.com\nalby-tomy.online"
+- Sign off EXACTLY as: "Best,\nAlby Tomy,\nFreelancer Software Engineer,\nalby.u.tomy@gmail.com\nhttps://www.alby-tomy.online/"
 - Return ONLY valid JSON: {{"subject": "...", "body": "..."}}
 - Body should use line breaks (\\n) not HTML tags"""
 
@@ -214,7 +214,7 @@ IMPORTANT RULES — follow this narrative structure:
 
 # ── Fallback templates (used when Claude is unavailable) ─────────────────────
 
-_SIGNATURE = "Best,\nAlby Tomy,\nFreelancer Software Engineer,\nalby.u.tomy@gmail.com\nalby-tomy.online"
+_SIGNATURE = "Best,\nAlby Tomy,\nFreelancer Software Engineer,\nalby.u.tomy@gmail.com\nhttps://www.alby-tomy.online/"
 
 
 def _fallback_report(
